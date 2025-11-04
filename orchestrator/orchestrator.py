@@ -63,9 +63,30 @@ class Orchestrator:
             self._intent_router._media = deps.media_handler  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
-    def process(self, user_text: str, speaker_temp_id: str) -> tuple[str, str]:
-        """Process a text request and return the response along with persona label."""
+    def process(
+        self,
+        user_text: str,
+        speaker_temp_id: str,
+        *,
+        room_hint: Optional[str] = None,
+        conversation_router: Optional[object] = None,
+        output_router: Optional[object] = None,
+    ) -> tuple[str, str]:
+        """Process a text request and return the response along with persona label.
 
+        Parameters
+        ----------
+        user_text:
+            User input text.
+        speaker_temp_id:
+            Temporary speaker identifier.
+        room_hint:
+            Optional room identifier where wakeword was detected.
+        conversation_router:
+            Optional ConversationRouter instance for room selection and routing.
+        output_router:
+            Optional OutputRouter instance for TTS output routing.
+        """
         if not user_text.strip():
             raise ValueError("user_text must be non-empty")
 
@@ -122,6 +143,29 @@ class Orchestrator:
             persona=persona,
             user_text=user_text,
         )
+
+        # Multi-room routing (if routers are provided)
+        if conversation_router and output_router:
+            try:
+                # Determine active room
+                room_id = conversation_router.select_active_room(stable_uuid, speaker_temp_id, room_hint)
+
+                # Check if speech is allowed
+                if conversation_router.can_speak_in(room_id, persona.name):
+                    # Generate TTS audio
+                    from services.voice_pipeline.tts_engine import TTSEngine
+
+                    tts = TTSEngine()
+                    audio = tts.synth(persona=persona.name, text=response)
+
+                    # Route via output router
+                    output_router.route(persona.name, stable_uuid, room_id, audio)
+
+                # Update last room and publish active room event
+                conversation_router.update_last_room(stable_uuid, room_id)
+            except Exception:
+                # Routing failures should not break the orchestrator
+                Logger.exception("Failed to route TTS output")
 
         persona_label = persona.name
         return response, persona_label

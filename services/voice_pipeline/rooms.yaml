@@ -1,0 +1,14 @@
+rooms:
+  - id: lounge
+    wyoming_host: 127.0.0.1
+    wyoming_port: 10700
+    mics:
+      - id: mic_lounge_1
+        device: hw:2,0
+  - id: kitchen
+    wyoming_host: 127.0.0.1
+    wyoming_port: 10710
+    mics:
+      - id: mic_kitchen_1
+        device: hw:3,0
+
